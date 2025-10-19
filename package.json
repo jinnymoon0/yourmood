@@ -1,0 +1,9 @@
+{
+  "name": "yourmood",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "firebase": "^11.0.0"
+  }
+}

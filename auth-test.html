@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8" />
+<title>YourMood — Auth Test</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:680px;margin:40px auto;padding:0 16px}
+  input,button,select,textarea{padding:10px;border:1px solid #ddd;border-radius:10px;margin:6px 0}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  .card{border:1px solid #eee;border-radius:14px;padding:16px;margin:14px 0}
+  code{background:#f7f7f7;padding:2px 6px;border-radius:6px}
+</style>
+
+<h1>🔥 YourMood — Auth & Firestore Test</h1>
+
+<div class="card">
+  <h3>1) Email/Password</h3>
+  <div class="row">
+    <input id="email" type="email" placeholder="email@example.com" />
+    <input id="pw" type="password" placeholder="password" />
+  </div>
+  <div class="row">
+    <button id="signup">Sign up</button>
+    <button id="signin">Sign in</button>
+    <button id="signout">Sign out</button>
+  </div>
+  <div>Current user: <code id="who">—</code></div>
+</div>
+
+<div class="card">
+  <h3>2) Write today’s entry</h3>
+  <div class="row">
+    <label>Mood (1–5)
+      <input id="mood" type="number" min="1" max="5" value="3">
+    </label>
+  </div>
+  <div class="row">
+    <input id="tags" type="text" placeholder="comma tags: work,school,home" style="flex:1">
+  </div>
+  <textarea id="answer" placeholder="Short answer to today's question…" rows="4" style="width:100%"></textarea>
+  <div class="row">
+    <button id="save">Save today’s entry</button>
+  </div>
+  <div id="status">—</div>
+</div>
+
+<script type="module">
+  // Firebase v10+ modular CDN imports
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+  import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+  import { getFirestore, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+  // Your actual Firebase config
+  const firebaseConfig = {
+    apiKey: "AIzaSyBB3ITad6IYprc-8j5fpHnhjVRq0UFotdo",
+    authDomain: "yourmood-e4e10.firebaseapp.com",
+    projectId: "yourmood-e4e10",
+    storageBucket: "yourmood-e4e10.firebasestorage.app",
+    messagingSenderId: "895278921175",
+    appId: "1:895278921175:web:21ec3a33d5b5d17ca44792"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  const $ = (id) => document.getElementById(id);
+  const who = $("who");
+
+  onAuthStateChanged(auth, (user) => {
+    who.textContent = user ? `${user.uid}` : "— (signed out)";
+  });
+
+  $("signup").onclick = async () => {
+    const email = $("email").value.trim();
+    const pw = $("pw").value;
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, pw);
+      // create users/{uid}
+      await setDoc(doc(db, "users", cred.user.uid), {
+        displayName: "",
+        locale: "ko",
+        defaultTags: ["work","school","home","gathering","friends"],
+        createdAt: serverTimestamp(),
+        reminderHourKST: 21
+      }, { merge: true });
+      alert("Signed up & profile created!");
+    } catch (e) {
+      alert("Sign up error: " + e.message);
+      console.error(e);
+    }
+  };
+
+  $("signin").onclick = async () => {
+    const email = $("email").value.trim();
+    const pw = $("pw").value;
+    try {
+      await signInWithEmailAndPassword(auth, email, pw);
+      alert("Signed in!");
+    } catch (e) {
+      alert("Sign in error: " + e.message);
+      console.error(e);
+    }
+  };
+
+  $("signout").onclick = () => signOut(auth);
+
+  $("save").onclick = async () => {
+    const user = auth.currentUser;
+    if (!user) return alert("Sign in first.");
+
+    const mood = Number($("mood").value) || 3;
+    const tags = $("tags").value.split(",").map(s => s.trim()).filter(Boolean).slice(0,10);
+    const ans = $("answer").value.trim();
+
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth()+1).padStart(2,"0");
+    const dd = String(now.getDate()).padStart(2,"0");
+    const dateId = `${yyyy}-${mm}-${dd}`;
+
+    try {
+      await setDoc(doc(db, "entries", user.uid, String(yyyy), dateId), {
+        mood, tags,
+        answers: [{ qid: "manual", text: ans, lang: "ko" }],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+      $("status").textContent = "✅ Saved today’s entry!";
+    } catch (e) {
+      $("status").textContent = "❌ Save failed: " + e.message;
+      console.error(e);
+    }
+  };
+</script>
+</html>

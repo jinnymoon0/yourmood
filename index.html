@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>YourMood — Daily Mood, QOTD & Calendar Report</title>
+<style>
+  :root{
+    --bg:#fafafa; --fg:#1f2937; --muted:#6b7280; --card:#ffffff; --line:#e5e7eb;
+    --accent:#8b5cf6; --accent-2:#22c55e; --danger:#ef4444;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto;background:var(--bg);color:var(--fg)}
+  header{position:sticky;top:0;background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;align-items:center;gap:10px;z-index:10}
+  header h1{font-size:18px;margin:0;font-weight:700}
+  header .spacer{flex:1}
+  header .user-pill{font-size:12px;color:var(--muted)}
+  main{max-width:1100px;margin:24px auto;padding:0 16px;display:grid;gap:20px;grid-template-columns: 420px 1fr}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .section-title{margin:0 0 12px 0;font-size:14px;color:var(--muted);letter-spacing:.2px}
+  .row{display:flex;gap:12px;margin-top:12px}
+  textarea,input[type=text]{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px;font-size:14px;background:#fff}
+  input[type=search], select{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#fff}
+  .actions{display:flex;gap:8px;align-items:center;margin-top:12px}
+  button{border:1px solid var(--line);background:#fff;border-radius:12px;padding:10px 14px;cursor:pointer}
+  .btn-primary{background:var(--accent);color:#fff;border:none}
+  .btn-ghost{background:#fff}
+  .hint{font-size:12px;color:var(--muted)}
+  .status{font-size:13px;margin-top:6px}
+  /* Emoji picker */
+  .emoji-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:8px}
+  .emoji-btn{font-size:24px;line-height:1;border:1px solid var(--line);border-radius:12px;background:#fff;cursor:pointer;padding:10px 0;transition:transform .05s}
+  .emoji-btn:active{transform:scale(.98)}
+  .emoji-btn.selected{outline:2px solid var(--accent)}
+  .legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .legend span{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:4px 8px;background:#fff}
+  /* Tag chips */
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .chip-btn{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 10px;font-size:12px;cursor:pointer}
+  .chip-btn.active{background:#eef2ff;border-color:#c7d2fe}
+  /* Calendar */
+  .cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .cal-title{font-weight:700}
+  .cal-nav{display:flex;gap:8px}
+  .cal-nav button{padding:8px 10px;border-radius:10px}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+  .dow{font-size:12px;color:var(--muted);text-align:center;margin-bottom:4px}
+  .day{background:#fff;border:1px solid var(--line);border-radius:12px;min-height:84px;padding:6px;display:flex;flex-direction:column}
+  .day .head{display:flex;align-items:center;justify-content:space-between}
+  .day .date{font-size:12px;color:var(--muted)}
+  .day .today{color:#000;background:#eef2ff;border-radius:8px;padding:0 6px}
+  .day .body{flex:1;display:flex;align-items:center;justify-content:center;font-size:24px}
+  .day.muted{opacity:.45}
+  /* Stats bar (simple, no external libs) */
+  .stats{margin-top:12px}
+  .stat-row{display:flex;align-items:center;gap:8px;margin:6px 0}
+  .stat-emoji{width:28px;text-align:center}
+  .stat-bar-wrap{flex:1;height:12px;background:#f3f4f6;border-radius:999px;overflow:hidden;border:1px solid var(--line)}
+  .stat-bar{height:100%;background:#c7d2fe}
+  .stat-count{font-size:12px;color:var(--muted);min-width:28px;text-align:right}
+  /* Filters bar */
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px}
+  .filters .pill{border:1px solid var(--line);border-radius:999px;padding:6px 10px;font-size:12px;background:#fff;cursor:pointer}
+  .filters .pill.active{background:#dcfce7;border-color:#bbf7d0}
+  @media (max-width:900px){ main{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header>
+  <h1>🫶 YourMood</h1>
+  <div class="spacer"></div>
+  <div class="user-pill" id="userPill">Signing in…</div>
+</header>
+
+<main>
+  <!-- LEFT: Mood input + QOTD + Tags -->
+  <section class="card">
+    <h2 class="section-title">How are you feeling today?</h2>
+
+    <div id="emojiGrid" class="emoji-grid" aria-label="Choose your mood"></div>
+    <div class="legend" id="legend"></div>
+
+    <!-- QOTD -->
+    <div class="row" style="margin-top:14px">
+      <div style="width:100%">
+        <div class="section-title" id="qotdLabel">Question of the Day</div>
+        <div id="qotdText" style="font-size:14px;margin-bottom:6px"></div>
+        <textarea id="qotdAnswer" rows="2" placeholder="Your answer… (optional)"></textarea>
+        <div class="row" style="margin-top:8px;align-items:center">
+          <label class="hint"><input id="qotdRequired" type="checkbox" /> require answer before saving</label>
+          <div class="spacer"></div>
+          <select id="languageSelect" title="Language">
+            <option value="auto">Auto</option>
+            <option value="en">English</option>
+            <option value="ko">한국어</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tags -->
+    <div class="row">
+      <div style="width:100%">
+        <div class="section-title">Tags</div>
+        <div id="presetChips" class="chips"></div>
+        <input id="tags" type="text" placeholder="Custom tags (comma separated)" />
+      </div>
+    </div>
+
+    <div class="row">
+      <textarea id="note" rows="3" placeholder="Optional note (e.g., why you felt this way)"></textarea>
+    </div>
+
+    <div class="actions">
+      <button id="saveBtn" class="btn-primary">Save Today’s Mood</button>
+      <span class="hint">Per-day save. Click a calendar day to load/edit.</span>
+    </div>
+    <div id="status" class="status"></div>
+  </section>
+
+  <!-- RIGHT: Calendar report + Filters + Stats -->
+  <section class="card">
+    <div class="cal-header">
+      <div>
+        <div class="section-title">Monthly Report</div>
+        <div class="cal-title" id="calTitle">Month YYYY</div>
+      </div>
+      <div class="cal-nav">
+        <button id="prevMonth" class="btn-ghost">◀</button>
+        <button id="todayMonth" class="btn-ghost">Today</button>
+        <button id="nextMonth" class="btn-ghost">▶</button>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters">
+      <span class="pill" data-filter="all" id="filterAll" aria-pressed="true">All</span>
+      <span class="pill" data-filter="work">work</span>
+      <span class="pill" data-filter="school">school</span>
+      <span class="pill" data-filter="home">home</span>
+      <span class="pill" data-filter="friends">friends</span>
+      <span class="pill" data-filter="gathering">gathering</span>
+      <span class="pill" data-filter="outdoors">outdoors</span>
+    </div>
+
+    <div class="cal-grid" id="dow">
+      <div class="dow">Sun</div><div class="dow">Mon</div><div class="dow">Tue</div>
+      <div class="dow">Wed</div><div class="dow">Thu</div><div class="dow">Fri</div><div class="dow">Sat</div>
+    </div>
+    <div class="cal-grid" id="calGrid" aria-live="polite"></div>
+
+    <div class="section-title" style="margin-top:10px">This Month</div>
+    <div id="stats" class="stats"></div>
+  </section>
+</main>
+
+<!-- Firebase (v10 modular CDN) -->
+<script type="module">
+  /*************** 1) Firebase setup ***************/
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+  import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
+  import { getFirestore, doc, setDoc, getDocs, getDoc, collection, query, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBB3ITad6IYprc-8j5fpHnhjVRq0UFotdo",
+    authDomain: "yourmood-e4e10.firebaseapp.com",
+    projectId: "yourmood-e4e10",
+    storageBucket: "yourmood-e4e10.firebasestorage.app",
+    messagingSenderId: "895278921175",
+    appId: "1:895278921175:web:21ec3a33d5b5d17ca44792"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  /*************** 2) Data model ***************/
+  const EMOJIS = [
+    {key:"joy",   emoji:"😊", label:"Joy / Content"},
+    {key:"happy", emoji:"😄", label:"Happy"},
+    {key:"laugh", emoji:"😆", label:"Laughing"},
+    {key:"calm",  emoji:"😌", label:"Calm"},
+    {key:"love",  emoji:"🥰", label:"Loved"},
+    {key:"proud", emoji:"😎", label:"Proud"},
+    {key:"motiv", emoji:"💪", label:"Motivated"},
+    {key:"focus", emoji:"🧠", label:"Focused"},
+    {key:"ok",    emoji:"🙂", label:"Okay"},
+    {key:"meh",   emoji:"😐", label:"Meh"},
+    {key:"tired", emoji:"🥱", label:"Tired"},
+    {key:"sad",   emoji:"😢", label:"Sad"},
+    {key:"anx",   emoji:"😰", label:"Anxious"},
+    {key:"angry", emoji:"😠", label:"Angry"},
+    {key:"stress",emoji:"😫", label:"Stressed"},
+    {key:"sick",  emoji:"🤒", label:"Sick"},
+    {key:"overw", emoji:"😵", label:"Overwhelmed"},
+    {key:"lonely",emoji:"🥺", label:"Lonely"},
+    {key:"busy",  emoji:"🏃‍♀️", label:"Busy"},
+    {key:"party", emoji:"🎉", label:"Celebration"},
+    {key:"walk",  emoji:"🚶‍♀️", label:"Walk/Outdoors"},
+    {key:"study", emoji:"📚", label:"Studying"},
+    {key:"work",  emoji:"💼", label:"Work"},
+    {key:"home",  emoji:"🏠", label:"Home"},
+    {key:"coffee",emoji:"☕️", label:"Coffee"},
+    {key:"rain",  emoji:"🌧️", label:"Rainy mood"},
+    {key:"sun",   emoji:"☀️", label:"Sunny mood"},
+  ];
+
+  const PRESET_TAGS = ["work","school","home","friends","gathering","outdoors"];
+
+  // QOTD pool (EN/KR pairs). Rotates by date index.
+  const QOTD = [
+    {en:"What was the most intense feeling you noticed today?", ko:"오늘 가장 강하게 느꼈던 감정은 무엇이었나요?"},
+    {en:"What gave you energy—and what drained it?", ko:"오늘 에너지를 준 것은 무엇이고, 빼앗은 것은 무엇이었나요?"},
+    {en:"Who did you connect with today, and how did it feel?", ko:"오늘 누구와 연결감을 느꼈나요? 그때 어떤 기분이었나요?"},
+    {en:"What small thing are you grateful for right now?", ko:"지금 이 순간 고마운 사소한 일은 무엇인가요?"},
+    {en:"What would you like tomorrow-you to remember from today?", ko:"내일의 내가 오늘로부터 기억했으면 하는 것은 무엇인가요?"},
+  ];
+
+  /*************** 3) DOM refs ***************/
+  const $ = (id)=>document.getElementById(id);
+  const userPill = $("userPill");
+  const emojiGrid = $("emojiGrid");
+  const legend = $("legend");
+  const noteEl = $("note");
+  const tagsEl = $("tags");
+  const saveBtn = $("saveBtn");
+  const statusEl = $("status");
+  const qotdText = $("qotdText");
+  const qotdAnswer = $("qotdAnswer");
+  const qotdRequired = $("qotdRequired");
+  const languageSelect = $("languageSelect");
+  const presetChips = $("presetChips");
+
+  const calTitle = $("calTitle");
+  const calGrid = $("calGrid");
+  const statsEl = $("stats");
+  const prevMonthBtn = $("prevMonth");
+  const nextMonthBtn = $("nextMonth");
+  const todayMonthBtn = $("todayMonth");
+  const filterAll = $("filterAll");
+  let activeFilter = "all";
+
+  /*************** 4) State ***************/
+  let currentUser = null;
+  let selectedKey = null;
+  let viewYear, viewMonth; // month: 0-based
+
+  /*************** 5) Helpers ***************/
+  function ymd(d){
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth()+1).padStart(2,"0");
+    const dd = String(d.getDate()).padStart(2,"0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  function monthLabel(y,m){ return new Date(y,m,1).toLocaleDateString(undefined,{year:"numeric",month:"long"}); }
+  function startOfMonth(y,m){ return new Date(y,m,1); }
+  function endOfMonth(y,m){ return new Date(y,m+1,0); }
+  function sameYMD(a,b){ return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
+
+  function moodsColRef(uid){ return collection(db, "users", uid, "moods"); }
+
+  function getLang(){
+    const choice = languageSelect.value;
+    if(choice==="en" || choice==="ko") return choice;
+    const sys = (navigator.language||"en").toLowerCase();
+    return sys.startsWith("ko") ? "ko" : "en";
+  }
+
+  function getQOTDForDate(date){
+    const index = Math.abs(Math.floor(new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()/86400000)) % QOTD.length;
+    const lang = getLang();
+    const item = QOTD[index];
+    return lang==="ko" ? item.ko : item.en;
+  }
+
+  function renderQOTD(date){
+    qotdText.textContent = getQOTDForDate(date);
+  }
+
+  function buildEmojiPicker(){
+    emojiGrid.innerHTML = "";
+    EMOJIS.forEach(item=>{
+      const btn = document.createElement("button");
+      btn.className = "emoji-btn";
+      btn.title = item.label;
+      btn.setAttribute("data-key", item.key);
+      btn.textContent = item.emoji;
+      btn.addEventListener("click", ()=>{
+        selectedKey = item.key;
+        document.querySelectorAll(".emoji-btn").forEach(b=>b.classList.remove("selected"));
+        btn.classList.add("selected");
+      });
+      emojiGrid.appendChild(btn);
+    });
+    legend.innerHTML = "";
+    EMOJIS.slice(0,8).forEach(item=>{
+      const chip = document.createElement("span");
+      chip.textContent = `${item.emoji} ${item.label}`;
+      legend.appendChild(chip);
+    });
+  }
+
+  function buildPresetChips(){
+    presetChips.innerHTML = "";
+    PRESET_TAGS.forEach(tag=>{
+      const btn = document.createElement("button");
+      btn.className = "chip-btn";
+      btn.textContent = tag;
+      btn.addEventListener("click", ()=>{
+        btn.classList.toggle("active");
+        // Ensure text input reflects selected presets
+        const current = tagsEl.value.split(",").map(s=>s.trim()).filter(Boolean);
+        const set = new Set(current);
+        if(btn.classList.contains("active")) set.add(tag); else set.delete(tag);
+        tagsEl.value = Array.from(set).join(", ");
+      });
+      presetChips.appendChild(btn);
+    });
+  }
+
+  function collectTags(){
+    const typed = tagsEl.value.split(",").map(t=>t.trim()).filter(Boolean);
+    const presetSel = Array.from(presetChips.querySelectorAll(".chip-btn.active")).map(b=>b.textContent);
+    // merge unique
+    return Array.from(new Set([...typed, ...presetSel]));
+  }
+
+  function flash(msg, ok=true){
+    statusEl.style.color = ok ? "inherit" : "var(--danger)";
+    statusEl.textContent = msg;
+    setTimeout(()=>{ statusEl.textContent=""; }, 3000);
+  }
+
+  /*************** 6) Firestore ***************/
+  async function saveToday(uid){
+    if(!selectedKey){ throw new Error("Please select an emoji."); }
+    if(qotdRequired.checked && !qotdAnswer.value.trim()){
+      throw new Error("Please answer the Question of the Day (toggle off ‘require’ to skip).");
+    }
+    const today = new Date();
+    const id = ymd(today);
+    const item = EMOJIS.find(e=>e.key===selectedKey);
+    const payload = {
+      date: id,
+      moodKey: item.key,
+      moodEmoji: item.emoji,
+      note: noteEl.value.trim() || null,
+      tags: collectTags(),
+      qotd: { question: getQOTDForDate(today), answer: qotdAnswer.value.trim() || null },
+      updatedAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
+    };
+    await setDoc(doc(moodsColRef(uid), id), payload, { merge: true });
+    return { id, payload };
+  }
+
+  async function fetchMonth(uid, y, m){
+    const from = ymd(startOfMonth(y,m));
+    const to = ymd(endOfMonth(y,m));
+    const q1 = query(moodsColRef(uid), where("date", ">=", from), where("date", "<=", to));
+    const snap = await getDocs(q1);
+    const map = {};
+    snap.forEach(d=>{ map[d.id] = d.data(); });
+    return map;
+  }
+
+  async function fetchDay(uid, id){
+    const ref = doc(moodsColRef(uid), id);
+    const snap = await getDoc(ref);
+    return snap.exists() ? snap.data() : null;
+  }
+
+  /*************** 7) Calendar + Stats ***************/
+  async function renderCalendar(){
+    if(!currentUser) return;
+    calTitle.textContent = monthLabel(viewYear, viewMonth);
+    calGrid.innerHTML = "";
+
+    const first = startOfMonth(viewYear, viewMonth);
+    const last = endOfMonth(viewYear, viewMonth);
+    const firstWeekday = first.getDay();
+    const daysInMonth = last.getDate();
+
+    const monthData = await fetchMonth(currentUser.uid, viewYear, viewMonth);
+    const today = new Date();
+
+    // Leading blanks
+    for(let i=0;i<firstWeekday;i++){
+      const cell = document.createElement("div");
+      cell.className = "day muted";
+      cell.innerHTML = `<div class="head"><span class="date"></span></div><div class="body"></div>`;
+      calGrid.appendChild(cell);
+    }
+
+    // Days
+    for(let d=1; d<=daysInMonth; d++){
+      const dateObj = new Date(viewYear, viewMonth, d);
+      const id = ymd(dateObj);
+      const entry = monthData[id];
+
+      // Filter logic by tag
+      let hiddenByFilter = false;
+      if(activeFilter!=="all"){
+        const tags = entry?.tags || [];
+        hiddenByFilter = !tags.map(t=>t.toLowerCase()).includes(activeFilter);
+      }
+
+      const cell = document.createElement("div");
+      cell.className = "day" + (hiddenByFilter ? " muted" : "");
+      const isToday = sameYMD(dateObj, today);
+
+      const head = document.createElement("div");
+      head.className = "head";
+      const dateSpan = document.createElement("span");
+      dateSpan.className = "date" + (isToday ? " today" : "");
+      dateSpan.textContent = d;
+      head.appendChild(dateSpan);
+
+      const body = document.createElement("div");
+      body.className = "body";
+      body.textContent = entry?.moodEmoji || "";
+
+      cell.appendChild(head);
+      cell.appendChild(body);
+
+      cell.addEventListener("click", async ()=>{
+        // Load the day's entry (if any) into the left panel to edit
+        const data = await fetchDay(currentUser.uid, id);
+        if(data){
+          selectedKey = data.moodKey;
+          document.querySelectorAll(".emoji-btn").forEach(b=>b.classList.remove("selected"));
+          const btn = document.querySelector(`.emoji-btn[data-key="${selectedKey}"]`);
+          if(btn) btn.classList.add("selected");
+          noteEl.value = data.note || "";
+          // tags (preset + text)
+          const tagSet = new Set((data.tags||[]).map(t=>t.toLowerCase()));
+          presetChips.querySelectorAll(".chip-btn").forEach(b=>{
+            const on = tagSet.has(b.textContent.toLowerCase());
+            b.classList.toggle("active", on);
+          });
+          // Text field includes any non-preset tags
+          const others = (data.tags||[]).filter(t=>!PRESET_TAGS.includes(t.toLowerCase()));
+          tagsEl.value = others.join(", ");
+          qotdAnswer.value = data.qotd?.answer || "";
+          renderQOTD(dateObj);
+          window.scrollTo({top:0,behavior:"smooth"});
+          flash("Loaded this day’s entry. Edit and Save to update.");
+        }else{
+          selectedKey = null;
+          document.querySelectorAll(".emoji-btn").forEach(b=>b.classList.remove("selected"));
+          noteEl.value = "";
+          presetChips.querySelectorAll(".chip-btn").forEach(b=>b.classList.remove("active"));
+          tagsEl.value = "";
+          qotdAnswer.value = "";
+          renderQOTD(dateObj);
+          flash("No entry for this day yet. Pick an emoji and Save.");
+        }
+      });
+
+      calGrid.appendChild(cell);
+    }
+
+    // Trailing blanks
+    const totalCells = firstWeekday + daysInMonth;
+    const trailing = (7 - (totalCells % 7)) % 7;
+    for(let i=0;i<trailing;i++){
+      const cell = document.createElement("div");
+      cell.className = "day muted";
+      cell.innerHTML = `<div class="head"><span class="date"></span></div><div class="body"></div>`;
+      calGrid.appendChild(cell);
+    }
+
+    // Stats (frequency + tiny bars)
+    const counts = {};
+    Object.values(monthData).forEach(v=>{
+      // respect filters here too
+      if(activeFilter!=="all"){
+        const has = (v.tags||[]).map(t=>t.toLowerCase()).includes(activeFilter);
+        if(!has) return;
+      }
+      counts[v.moodEmoji] = (counts[v.moodEmoji]||0)+1;
+    });
+
+    statsEl.innerHTML = "";
+    if(Object.keys(counts).length===0){
+      statsEl.innerHTML = `<div class="hint">No entries yet for this filter/month.</div>`;
+    }else{
+      const entries = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+      const max = entries[0][1];
+      entries.forEach(([emoji,c])=>{
+        const row = document.createElement("div");
+        row.className = "stat-row";
+        const em = document.createElement("div"); em.className="stat-emoji"; em.textContent = emoji;
+        const wrap = document.createElement("div"); wrap.className="stat-bar-wrap";
+        const bar = document.createElement("div"); bar.className="stat-bar"; bar.style.width = (c/max*100).toFixed(0)+"%";
+        const cnt = document.createElement("div"); cnt.className="stat-count"; cnt.textContent = `× ${c}`;
+        wrap.appendChild(bar);
+        row.appendChild(em); row.appendChild(wrap); row.appendChild(cnt);
+        statsEl.appendChild(row);
+      });
+    }
+  }
+
+  /*************** 8) Events ***************/
+  // Save
+  saveBtn.addEventListener("click", async ()=>{
+    try{
+      if(!currentUser) throw new Error("Not signed in yet.");
+      await saveToday(currentUser.uid);
+      flash("Saved today’s mood ✅", true);
+      await renderCalendar();
+    }catch(err){
+      console.error(err);
+      flash(err.message || "Failed to save.", false);
+    }
+  });
+
+  // Month nav
+  prevMonthBtn.addEventListener("click", ()=>{
+    const d = new Date(viewYear, viewMonth-1, 1);
+    viewYear = d.getFullYear(); viewMonth = d.getMonth();
+    renderCalendar();
+  });
+  nextMonthBtn.addEventListener("click", ()=>{
+    const d = new Date(viewYear, viewMonth+1, 1);
+    viewYear = d.getFullYear(); viewMonth = d.getMonth();
+    renderCalendar();
+  });
+  todayMonthBtn.addEventListener("click", ()=>{
+    const now = new Date();
+    viewYear = now.getFullYear(); viewMonth = now.getMonth();
+    renderCalendar();
+  });
+
+  // Filters (tag)
+  document.querySelectorAll(".filters .pill").forEach(p=>{
+    p.addEventListener("click", ()=>{
+      document.querySelectorAll(".filters .pill").forEach(x=>x.classList.remove("active"));
+      p.classList.add("active");
+      activeFilter = p.dataset.filter;
+      renderCalendar();
+    });
+  });
+  filterAll.classList.add("active");
+
+  // Language change
+  languageSelect.addEventListener("change", ()=>renderQOTD(new Date()));
+
+  /*************** 9) Auth boot ***************/
+  onAuthStateChanged(auth, async (user)=>{
+    if(user){
+      currentUser = user;
+      userPill.textContent = `UID: ${user.uid.slice(0,8)}… (anonymous)`;
+      const now = new Date();
+      viewYear = now.getFullYear(); viewMonth = now.getMonth();
+      buildEmojiPicker();
+      buildPresetChips();
+      renderQOTD(now);
+      await renderCalendar();
+    }else{
+      userPill.textContent = "Signing in…";
+      // Firebase Console → Authentication → Sign-in method → Anonymous (Enable)
+      await signInAnonymously(auth);
+    }
+  });
+</script>
+</body>
+</html>
